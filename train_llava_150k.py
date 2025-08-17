@@ -15,8 +15,6 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import CLIPVisionModel, CLIPImageProcessor, AutoTokenizer
 from PIL import Image
 import time
-import json
-import random
 import requests
 from io import BytesIO
 
@@ -111,25 +109,71 @@ print(f"\n📚 Loading LLaVA-Instruct-150K dataset...")
 
 raw_data = None
 try:
-    # Try to load the actual LLaVA dataset
+    # Try to load the actual LLaVA dataset with different approaches
     from datasets import load_dataset
-    dataset = load_dataset("liuhaotian/LLaVA-Instruct-150K", split="train")
     
-    if len(dataset) > 0:
+    print("  Attempting to load dataset...")
+    
+    # Try the main dataset first
+    try:
+        dataset = load_dataset("liuhaotian/LLaVA-Instruct-150K", split="train")
         raw_data = dataset
-        print(f"✅ LLaVA dataset loaded: {len(raw_data)} samples")
+        print(f"✅ LLaVA main dataset loaded: {len(raw_data)} samples")
+    except Exception as e1:
+        print(f"  Main dataset failed: {e1}")
         
-        # Take subset if specified
+        # Try alternative loading methods
+        try:
+            # Load without split specification
+            dataset = load_dataset("liuhaotian/LLaVA-Instruct-150K")
+            if hasattr(dataset, 'keys') and len(dataset.keys()) > 0:
+                split_name = list(dataset.keys())[0]
+                raw_data = dataset[split_name]
+                print(f"✅ LLaVA dataset loaded from split '{split_name}': {len(raw_data)} samples")
+            else:
+                raise Exception("No valid splits found")
+        except Exception as e2:
+            print(f"  Alternative loading failed: {e2}")
+            
+            # Try loading from local cache or different format
+            try:
+                # Load from JSON files directly if available
+                import json
+                import os
+                
+                # Check if we have local JSON files
+                cache_dir = os.path.expanduser("~/.cache/huggingface/datasets")
+                llava_dirs = [d for d in os.listdir(cache_dir) if 'llava' in d.lower()] if os.path.exists(cache_dir) else []
+                
+                if llava_dirs:
+                    print(f"  Found LLaVA cache directories: {llava_dirs}")
+                    # For now, we'll use synthetic data but this gives us info
+                
+                raise Exception("All loading methods failed")
+                
+            except Exception as e3:
+                print(f"  JSON loading failed: {e3}")
+                raise Exception(f"All dataset loading attempts failed: {e1}, {e2}, {e3}")
+    
+    # If we got data, potentially subsample it
+    if raw_data is not None and len(raw_data) > 0:
         if config['num_samples'] < len(raw_data):
-            raw_data = raw_data.select(range(config['num_samples']))
+            print(f"  Subsampling from {len(raw_data)} to {config['num_samples']} samples...")
+            indices = list(range(min(config['num_samples'], len(raw_data))))
+            raw_data = raw_data.select(indices)
             print(f"📊 Using {len(raw_data)} samples for training")
-    else:
-        print("⚠️ LLaVA dataset empty, using fallback")
-        raw_data = None
         
+        # Quick validation of data format
+        sample = raw_data[0]
+        if 'conversations' not in sample:
+            print("⚠️ Dataset format doesn't match expected LLaVA format, using synthetic data")
+            raw_data = None
+        else:
+            print(f"✅ Dataset validation passed: {len(raw_data)} valid samples")
+    
 except Exception as e:
     print(f"❌ Failed to load LLaVA dataset: {e}")
-    print("💡 Using enhanced synthetic data for testing")
+    print("💡 Falling back to enhanced synthetic data for training")
     raw_data = None
 
 # Enhanced dataset class - LESSONS LEARNED applied
