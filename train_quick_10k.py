@@ -277,8 +277,20 @@ for epoch in range(config['num_epochs']):
             hidden_states = model.norm(embeddings)
             logits = model.unembedding(hidden_states).float()
             
+            # Fix batch size mismatch - ensure logits and labels match
+            # Get the actual labels from multimodal_inputs (not original labels)
+            target_labels = multimodal_inputs["labels"]
+            
+            # Debug shapes
+            print(f"Debug - Logits: {logits.shape}, Target labels: {target_labels.shape}")
+            
+            # Ensure same sequence length
+            min_seq_len = min(logits.size(1), target_labels.size(1))
+            logits_trimmed = logits[:, :min_seq_len, :]
+            labels_trimmed = target_labels[:, :min_seq_len]
+            
             # Compute loss
-            loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+            loss = criterion(logits_trimmed.view(-1, logits_trimmed.size(-1)), labels_trimmed.view(-1))
         
         # Backward pass
         scaler.scale(loss).backward()
