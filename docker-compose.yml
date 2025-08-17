@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  training:
+    build: .
+    image: gpt-oss-vision:latest
+    container_name: gpt-oss-training
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+      - WANDB_API_KEY=${WANDB_API_KEY}
+    volumes:
+      - ./data:/workspace/data
+      - ./checkpoints:/workspace/checkpoints
+      - ./logs:/workspace/logs
+    ports:
+      - "8888:8888"  # Jupyter
+      - "6006:6006"  # TensorBoard
+    shm_size: '16gb'
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    command: >
+      bash -c "
+        cd /workspace/gpt-oss-vision &&
+        python train_quick_10k.py
+      "
