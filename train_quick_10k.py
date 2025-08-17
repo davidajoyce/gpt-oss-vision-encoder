@@ -71,8 +71,22 @@ model.set_image_token_id(image_token_id)
 
 # CLIP Vision
 print("  Loading CLIP vision encoder...")
-vision_tower = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32").cuda()
-image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
+try:
+    vision_tower = CLIPVisionModel.from_pretrained(
+        "openai/clip-vit-base-patch32", 
+        use_safetensors=True
+    ).cuda()
+    image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
+except:
+    print("  Trying fallback method...")
+    # Fallback for older PyTorch versions
+    import os
+    os.environ["TRANSFORMERS_CACHE"] = "/tmp"
+    vision_tower = CLIPVisionModel.from_pretrained(
+        "openai/clip-vit-base-patch32",
+        trust_remote_code=True
+    ).cuda()
+    image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
 vision_tower.eval()
 
 # Projector
@@ -202,7 +216,11 @@ print(f"✅ Dataset ready: {len(train_loader)} batches")
 # ============================================
 
 # Setup training
-model.vision_tower = vision_tower
+# Wrap vision tower to return tensor directly (fix for transformers output object)
+def vision_tower_wrapper(images):
+    return vision_tower(images).last_hidden_state
+
+model.vision_tower = vision_tower_wrapper
 model.mm_projector = projector
 
 optimizer = torch.optim.AdamW(
@@ -236,7 +254,7 @@ for epoch in range(config['num_epochs']):
         pixel_values = batch['pixel_values'].cuda()
         
         # Mixed precision training
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast('cuda'):
             # Get vision features
             with torch.no_grad():
                 vision_features = vision_tower(pixel_values).last_hidden_state
