@@ -1,0 +1,10 @@
+{
+  "final_loss": 0.0,
+  "training_time_seconds": 0.44423985481262207,
+  "trainable_parameters": 262656,
+  "config": {
+    "hidden_size": 256,
+    "vision_tower": "openai/clip-vit-base-patch32",
+    "projector_type": "mlp2x_gelu"
+  }
+}

@@ -1,0 +1,702 @@
+[
+  {
+    "id": "instruction_0000",
+    "image": "synthetic_0000.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0001",
+    "image": "synthetic_0001.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat color is the main object in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "green"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0002",
+    "image": "synthetic_0002.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange triangle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0003",
+    "image": "synthetic_0003.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "square"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0004",
+    "image": "synthetic_0004.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a blue circle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0005",
+    "image": "synthetic_0005.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0006",
+    "image": "synthetic_0006.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a triangle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0007",
+    "image": "synthetic_0007.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0008",
+    "image": "synthetic_0008.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a triangle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0009",
+    "image": "synthetic_0009.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a triangle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0010",
+    "image": "synthetic_0010.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a green square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0011",
+    "image": "synthetic_0011.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat color is the main object in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "blue"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0012",
+    "image": "synthetic_0012.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat color is the main object in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "red"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0013",
+    "image": "synthetic_0013.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a square in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0014",
+    "image": "synthetic_0014.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0015",
+    "image": "synthetic_0015.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0016",
+    "image": "synthetic_0016.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a purple triangle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0017",
+    "image": "synthetic_0017.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a green triangle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0018",
+    "image": "synthetic_0018.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a yellow triangle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0019",
+    "image": "synthetic_0019.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0020",
+    "image": "synthetic_0020.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a circle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0021",
+    "image": "synthetic_0021.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a square in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0022",
+    "image": "synthetic_0022.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "square"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0023",
+    "image": "synthetic_0023.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "square"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0024",
+    "image": "synthetic_0024.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0025",
+    "image": "synthetic_0025.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a circle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0026",
+    "image": "synthetic_0026.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat color is the main object in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "green"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0027",
+    "image": "synthetic_0027.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0028",
+    "image": "synthetic_0028.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0029",
+    "image": "synthetic_0029.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat color is the main object in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "red"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0030",
+    "image": "synthetic_0030.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a blue square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0031",
+    "image": "synthetic_0031.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a blue square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0032",
+    "image": "synthetic_0032.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "square"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0033",
+    "image": "synthetic_0033.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a square in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0034",
+    "image": "synthetic_0034.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0035",
+    "image": "synthetic_0035.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange circle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0036",
+    "image": "synthetic_0036.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat color is the main object in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "green"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0037",
+    "image": "synthetic_0037.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0038",
+    "image": "synthetic_0038.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0039",
+    "image": "synthetic_0039.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a square in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0040",
+    "image": "synthetic_0040.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "circle"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0041",
+    "image": "synthetic_0041.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a circle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0042",
+    "image": "synthetic_0042.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a red circle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0043",
+    "image": "synthetic_0043.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a circle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0044",
+    "image": "synthetic_0044.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a orange circle on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0045",
+    "image": "synthetic_0045.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe the image in detail."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a green square on a light gray background."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0046",
+    "image": "synthetic_0046.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a triangle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0047",
+    "image": "synthetic_0047.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nIs there a geometric shape in this image?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, there is a triangle in the image."
+      }
+    ]
+  },
+  {
+    "id": "instruction_0048",
+    "image": "synthetic_0048.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "square"
+      }
+    ]
+  },
+  {
+    "id": "instruction_0049",
+    "image": "synthetic_0049.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nWhat shape do you see in the image?"
+      },
+      {
+        "from": "gpt",
+        "value": "triangle"
+      }
+    ]
+  }
+]

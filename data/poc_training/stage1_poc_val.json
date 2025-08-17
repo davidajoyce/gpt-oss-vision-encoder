@@ -1,0 +1,142 @@
+[
+  {
+    "id": "synthetic_0000",
+    "image": "synthetic_0000.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "There is a purple square displayed."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0001",
+    "image": "synthetic_0001.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "The image contains a red square."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0002",
+    "image": "synthetic_0002.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "The image contains a blue circle."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0003",
+    "image": "synthetic_0003.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "A orange square is visible in this image."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0004",
+    "image": "synthetic_0004.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "A blue square is visible in this image."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0005",
+    "image": "synthetic_0005.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "There is a orange square displayed."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0006",
+    "image": "synthetic_0006.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "The image contains a red circle."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0007",
+    "image": "synthetic_0007.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "I can see a blue circle in the image."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0008",
+    "image": "synthetic_0008.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "This image shows a purple triangle."
+      }
+    ]
+  },
+  {
+    "id": "synthetic_0009",
+    "image": "synthetic_0009.jpg",
+    "conversations": [
+      {
+        "from": "human",
+        "value": "<image>\nDescribe this image."
+      },
+      {
+        "from": "gpt",
+        "value": "A purple square is visible in this image."
+      }
+    ]
+  }
+]
