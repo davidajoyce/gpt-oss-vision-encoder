@@ -2,6 +2,7 @@ import json
 import math
 import os
 from dataclasses import dataclass
+from typing import Optional, List, Union
 
 import torch
 import torch.distributed as dist
@@ -27,6 +28,18 @@ class ModelConfig:
     rope_scaling_factor: float = 32.0
     rope_ntk_alpha: float = 1.0
     rope_ntk_beta: float = 32.0
+    
+    # Vision-related configuration
+    mm_vision_tower: str = None
+    mm_projector_type: str = "linear"
+    mm_hidden_size: int = None
+    mm_vision_select_layer: int = -2
+    mm_vision_select_feature: str = "patch"
+    mm_patch_merge_type: str = "flat"
+    use_mm_proj: bool = False
+    tune_mm_mlp_adapter: bool = False
+    freeze_mm_mlp_adapter: bool = False
+    pretrain_mm_mlp_adapter: str = None
 
 
 class RMSNorm(torch.nn.Module):
@@ -361,6 +374,7 @@ class Transformer(torch.nn.Module):
         device: torch.device | None = None,
     ):
         super().__init__()
+        self.config = config
         self.embedding = torch.nn.Embedding(
             config.vocab_size, config.hidden_size, device=device, dtype=torch.bfloat16
         )
@@ -378,14 +392,105 @@ class Transformer(torch.nn.Module):
             device=device,
             dtype=torch.bfloat16,
         )
+        
+        # Vision components (initialized later if needed)
+        self.vision_tower = None
+        self.mm_projector = None
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.embedding(x)
+    def forward(self, x: torch.Tensor, images: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if images is not None and self.vision_tower is not None:
+            return self.forward_multimodal(x, images)
+        else:
+            return self.forward_text_only(x)
+    
+    def forward_text_only(self, input_ids: torch.Tensor) -> torch.Tensor:
+        x = self.embedding(input_ids)
         for block in self.block:
             x = block(x)
         x = self.norm(x)
         x = self.unembedding(x)
         return x
+    
+    def forward_multimodal(self, input_ids: torch.Tensor, images: torch.Tensor) -> torch.Tensor:
+        # Process images through vision tower
+        image_features = self.vision_tower(images)
+        if self.mm_projector is not None:
+            image_features = self.mm_projector(image_features)
+        
+        # Process text tokens
+        text_embeddings = self.embedding(input_ids)
+        
+        # For now, simple concatenation - this will be enhanced in Phase 2
+        # In a full implementation, this would handle proper interleaving
+        batch_size = text_embeddings.shape[0]
+        if image_features.dim() == 3:  # [batch, num_patches, hidden_size]
+            # Concatenate image features at the beginning
+            combined_embeddings = torch.cat([image_features, text_embeddings], dim=1)
+        else:
+            # Handle single image case
+            combined_embeddings = torch.cat([image_features.unsqueeze(0), text_embeddings], dim=1)
+        
+        # Forward through transformer blocks
+        x = combined_embeddings
+        for block in self.block:
+            x = block(x)
+        x = self.norm(x)
+        x = self.unembedding(x)
+        return x
+    
+    def get_vision_tower(self):
+        vision_tower = getattr(self, 'vision_tower', None)
+        if type(vision_tower) is list:
+            vision_tower = vision_tower[0]
+        return vision_tower
+    
+    def initialize_vision_modules(self, model_args=None, fsdp=None):
+        """Initialize vision components similar to LLaVA."""
+        from .vision_tower import build_vision_tower
+        from .vision_projector import build_vision_projector
+        
+        # Set vision tower configuration
+        if hasattr(model_args, 'vision_tower'):
+            self.config.mm_vision_tower = model_args.vision_tower
+        
+        # Build vision tower if needed
+        if self.get_vision_tower() is None and self.config.mm_vision_tower:
+            vision_tower = build_vision_tower(self.config)
+            if fsdp is not None and len(fsdp) > 0:
+                self.vision_tower = [vision_tower]
+            else:
+                self.vision_tower = vision_tower
+        else:
+            if fsdp is not None and len(fsdp) > 0:
+                vision_tower = self.vision_tower[0]
+            else:
+                vision_tower = self.vision_tower
+            if vision_tower is not None:
+                vision_tower.load_model()
+        
+        # Set up projector configuration
+        if self.config.mm_vision_tower:
+            self.config.use_mm_proj = True
+            if hasattr(model_args, 'mm_projector_type'):
+                self.config.mm_projector_type = model_args.mm_projector_type
+            
+            # Set hidden size from vision tower
+            if self.vision_tower is not None:
+                vision_tower = self.get_vision_tower()
+                self.config.mm_hidden_size = vision_tower.hidden_size
+        
+        # Build projector if needed
+        if getattr(self, 'mm_projector', None) is None and self.config.use_mm_proj:
+            self.mm_projector = build_vision_projector(self.config)
+        
+        # Load pretrained projector weights if specified
+        if hasattr(model_args, 'pretrain_mm_mlp_adapter') and model_args.pretrain_mm_mlp_adapter:
+            mm_projector_weights = torch.load(model_args.pretrain_mm_mlp_adapter, map_location='cpu')
+            def get_w(weights, keyword):
+                return {k.split(keyword + '.')[1]: v for k, v in weights.items() if keyword in k}
+            
+            if self.mm_projector is not None:
+                self.mm_projector.load_state_dict(get_w(mm_projector_weights, 'mm_projector'))
 
     @staticmethod
     def from_checkpoint(
