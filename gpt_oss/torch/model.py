@@ -592,10 +592,11 @@ class Transformer(torch.nn.Module):
             dtype=old_unembedding.weight.dtype
         )
         
-        # Copy old weights
+        # Copy old weights (handle both expansion and contraction)
         with torch.no_grad():
-            self.embedding.weight[:old_vocab_size] = old_embedding.weight
-            self.unembedding.weight[:old_vocab_size] = old_unembedding.weight
+            copy_size = min(old_vocab_size, new_vocab_size)
+            self.embedding.weight[:copy_size] = old_embedding.weight[:copy_size]
+            self.unembedding.weight[:copy_size] = old_unembedding.weight[:copy_size]
         
         # Update config
         self.config.vocab_size = new_vocab_size
