@@ -55,7 +55,7 @@ config = {
     'batch_size': 8,         # Reduced for better throughput
     'learning_rate': 2e-5,
     'num_epochs': 3,
-    'save_every': 5000,
+    'save_every': 2500,      # More frequent checkpoints to prevent data loss
     'warmup_steps': 1000,
     'max_length': 512,
     'image_size': 224,
@@ -729,6 +729,7 @@ global_step = 0
 best_loss = float('inf')
 accumulation_step = 0
 batch_times = []  # Track batch processing times
+last_progress_time = time.time()  # Track for hang detection
 
 # ULTIMATE training loop
 for epoch in range(config['num_epochs']):
@@ -791,14 +792,45 @@ for epoch in range(config['num_epochs']):
             if len(batch_times) > 100:  # Keep only last 100 times
                 batch_times.pop(0)
             
-            # Enhanced progress reporting with timing
+            # Enhanced progress reporting with timing and health checks
             if (batch_idx + 1) % 500 == 0:
                 current_lr = scheduler.get_last_lr()[0] if hasattr(scheduler, 'get_last_lr') else config['learning_rate']
                 actual_loss = loss.item() * config['gradient_accumulation_steps']
                 avg_batch_time = sum(batch_times) / len(batch_times) if batch_times else 0
                 print(f"  Batch {batch_idx+1}/{len(train_loader)} | Loss: {actual_loss:.4f} | LR: {current_lr:.2e} | Step: {global_step}")
                 print(f"    ⏱️ Avg batch time: {avg_batch_time:.2f}s | Batches/min: {60/avg_batch_time:.1f}")
+                
+                # Health check - detect if GPU has crashed
+                if torch.cuda.is_available():
+                    try:
+                        current_memory = torch.cuda.memory_allocated() / 1e9
+                        if current_memory < 1.0:  # Less than 1GB suggests process issues
+                            print(f"    ⚠️ WARNING: Very low GPU memory ({current_memory:.1f}GB) - possible crash")
+                    except:
+                        print(f"    ❌ WARNING: Cannot check GPU memory - possible system issue")
+                
+                # Update last progress time
+                last_progress_time = time.time()
+                
                 log_gpu_memory_ultimate(global_step)
+                
+                # Force garbage collection every 500 batches to prevent memory leaks
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                import gc
+                gc.collect()
+            
+            # Hang detection - if no progress for 10 minutes, something is wrong
+            elif time.time() - last_progress_time > 600:  # 10 minutes
+                print(f"  ⚠️ WARNING: No progress for {(time.time() - last_progress_time)/60:.1f} minutes")
+                print(f"  📊 Current batch: {batch_idx+1}/{len(train_loader)}")
+                if torch.cuda.is_available():
+                    try:
+                        current_memory = torch.cuda.memory_allocated() / 1e9
+                        print(f"  🖥️ GPU Memory: {current_memory:.1f}GB")
+                    except:
+                        print(f"  ❌ Cannot check GPU memory")
+                last_progress_time = time.time()  # Reset timer
             
             # ROBUST checkpoint saving
             if global_step > 0 and global_step % config['save_every'] == 0:
