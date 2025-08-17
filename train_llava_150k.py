@@ -104,76 +104,122 @@ projector = nn.Linear(768, model_config.hidden_size).to(device).float()
 
 print("✅ All components loaded!")
 
-# Load LLaVA dataset with robust fallback
+# Load LLaVA dataset with robust fallback and better logging
 print(f"\n📚 Loading LLaVA-Instruct-150K dataset...")
 
 raw_data = None
+dataset_loading_methods = [
+    {
+        'name': 'Main dataset with split',
+        'func': lambda: load_dataset("liuhaotian/LLaVA-Instruct-150K", split="train")
+    },
+    {
+        'name': 'Dataset without split',
+        'func': lambda: load_dataset("liuhaotian/LLaVA-Instruct-150K")
+    },
+    {
+        'name': 'Dataset with trust_remote_code',
+        'func': lambda: load_dataset("liuhaotian/LLaVA-Instruct-150K", trust_remote_code=True)
+    },
+    {
+        'name': 'Alternative LLaVA dataset',
+        'func': lambda: load_dataset("MMInstruction/LLaVA-Instruct", split="train")
+    }
+]
+
 try:
-    # Try to load the actual LLaVA dataset with different approaches
     from datasets import load_dataset
+    print("  📦 Datasets library loaded successfully")
     
-    print("  Attempting to load dataset...")
-    
-    # Try the main dataset first
-    try:
-        dataset = load_dataset("liuhaotian/LLaVA-Instruct-150K", split="train")
-        raw_data = dataset
-        print(f"✅ LLaVA main dataset loaded: {len(raw_data)} samples")
-    except Exception as e1:
-        print(f"  Main dataset failed: {e1}")
-        
-        # Try alternative loading methods
+    for i, method in enumerate(dataset_loading_methods, 1):
+        print(f"\n  {i}️⃣ Trying: {method['name']}")
         try:
-            # Load without split specification
-            dataset = load_dataset("liuhaotian/LLaVA-Instruct-150K")
-            if hasattr(dataset, 'keys') and len(dataset.keys()) > 0:
-                split_name = list(dataset.keys())[0]
-                raw_data = dataset[split_name]
-                print(f"✅ LLaVA dataset loaded from split '{split_name}': {len(raw_data)} samples")
-            else:
-                raise Exception("No valid splits found")
-        except Exception as e2:
-            print(f"  Alternative loading failed: {e2}")
+            dataset = method['func']()
+            print(f"     ⏳ Loading completed, processing...")
             
-            # Try loading from local cache or different format
-            try:
-                # Load from JSON files directly if available
-                import json
-                import os
+            # Handle different return types
+            if hasattr(dataset, 'keys'):
+                # DatasetDict - multiple splits
+                print(f"     📁 Found splits: {list(dataset.keys())}")
+                if len(dataset.keys()) > 0:
+                    split_name = list(dataset.keys())[0]
+                    raw_data = dataset[split_name]
+                    print(f"     ✅ Using split '{split_name}': {len(raw_data)} samples")
+                else:
+                    print(f"     ❌ No valid splits found")
+                    continue
+            else:
+                # Direct Dataset
+                raw_data = dataset
+                print(f"     ✅ Direct dataset: {len(raw_data)} samples")
+            
+            # Validate data format
+            if len(raw_data) > 0:
+                sample = raw_data[0]
+                print(f"     🔍 Sample keys: {list(sample.keys())}")
                 
-                # Check if we have local JSON files
-                cache_dir = os.path.expanduser("~/.cache/huggingface/datasets")
-                llava_dirs = [d for d in os.listdir(cache_dir) if 'llava' in d.lower()] if os.path.exists(cache_dir) else []
+                if 'conversations' in sample:
+                    print(f"     ✅ Valid LLaVA format detected")
+                    conv_sample = sample['conversations'][0] if sample['conversations'] else {}
+                    print(f"     💬 Sample conversation keys: {list(conv_sample.keys())}")
+                    break
+                else:
+                    print(f"     ⚠️ Missing 'conversations' key, trying next method...")
+                    raw_data = None
+                    continue
+            else:
+                print(f"     ❌ Empty dataset, trying next method...")
+                raw_data = None
+                continue
                 
-                if llava_dirs:
-                    print(f"  Found LLaVA cache directories: {llava_dirs}")
-                    # For now, we'll use synthetic data but this gives us info
-                
-                raise Exception("All loading methods failed")
-                
-            except Exception as e3:
-                print(f"  JSON loading failed: {e3}")
-                raise Exception(f"All dataset loading attempts failed: {e1}, {e2}, {e3}")
+        except Exception as e:
+            print(f"     ❌ Method failed: {str(e)[:100]}...")
+            continue
     
-    # If we got data, potentially subsample it
+    # If we successfully loaded data, subsample if needed
     if raw_data is not None and len(raw_data) > 0:
-        if config['num_samples'] < len(raw_data):
-            print(f"  Subsampling from {len(raw_data)} to {config['num_samples']} samples...")
-            indices = list(range(min(config['num_samples'], len(raw_data))))
-            raw_data = raw_data.select(indices)
-            print(f"📊 Using {len(raw_data)} samples for training")
+        print(f"\n  🎯 Dataset loading successful!")
         
-        # Quick validation of data format
-        sample = raw_data[0]
-        if 'conversations' not in sample:
-            print("⚠️ Dataset format doesn't match expected LLaVA format, using synthetic data")
+        if config['num_samples'] < len(raw_data):
+            print(f"  📊 Subsampling from {len(raw_data)} to {config['num_samples']} samples...")
+            try:
+                # Use select for efficient subsampling
+                indices = list(range(min(config['num_samples'], len(raw_data))))
+                raw_data = raw_data.select(indices)
+                print(f"  ✅ Subsampling complete: {len(raw_data)} samples ready")
+            except Exception as e:
+                print(f"  ⚠️ Subsampling failed: {e}")
+                print(f"  Using full dataset: {len(raw_data)} samples")
+        
+        # Final validation
+        try:
+            test_sample = raw_data[0]
+            conversations = test_sample['conversations']
+            print(f"  ✅ Final validation passed")
+            print(f"  📈 Ready for training with {len(raw_data)} real LLaVA samples")
+            
+            # Show a sample conversation structure
+            if len(conversations) > 0:
+                for j, conv in enumerate(conversations[:2]):
+                    role = conv.get('from', 'unknown')
+                    content = conv.get('value', '')[:50] + "..." if len(conv.get('value', '')) > 50 else conv.get('value', '')
+                    print(f"     Conv {j}: {role} -> {content}")
+                    
+        except Exception as e:
+            print(f"  ❌ Final validation failed: {e}")
             raw_data = None
-        else:
-            print(f"✅ Dataset validation passed: {len(raw_data)} valid samples")
     
+    if raw_data is None:
+        print(f"\n  ❌ All {len(dataset_loading_methods)} loading methods failed")
+        print(f"  💡 This is common with LLaVA dataset - using enhanced synthetic data")
+        
+except ImportError as e:
+    print(f"❌ Failed to import datasets library: {e}")
+    print("💡 Falling back to enhanced synthetic data")
+    raw_data = None
 except Exception as e:
-    print(f"❌ Failed to load LLaVA dataset: {e}")
-    print("💡 Falling back to enhanced synthetic data for training")
+    print(f"❌ Unexpected error during dataset loading: {e}")
+    print("💡 Falling back to enhanced synthetic data")
     raw_data = None
 
 # Enhanced dataset class - LESSONS LEARNED applied
