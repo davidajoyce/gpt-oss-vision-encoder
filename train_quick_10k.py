@@ -230,8 +230,9 @@ optimizer = torch.optim.AdamW(
 
 criterion = nn.CrossEntropyLoss(ignore_index=-100)
 
-# Mixed precision for faster training
-scaler = torch.cuda.amp.GradScaler()
+# Mixed precision for faster training (disabled due to bfloat16 issues)
+# scaler = torch.cuda.amp.GradScaler()
+use_mixed_precision = False
 
 print(f"\n🎯 Starting training...")
 print(f"Estimated time: 1-2 hours on RTX 4090")
