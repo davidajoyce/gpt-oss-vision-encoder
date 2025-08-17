@@ -1,0 +1,1 @@
+# Vision processing module for GPT-OSS multimodal capabilities

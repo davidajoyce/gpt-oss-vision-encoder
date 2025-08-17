@@ -1,5 +1,6 @@
 import sys
 import os
+import unittest
 
 # Add the project root to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -13,7 +14,7 @@ except ImportError:
 from gpt_oss.torch.model import ModelConfig
 
 
-class TestVisionConfig:
+class TestVisionConfig(unittest.TestCase):
     """Test vision-related configuration extensions to ModelConfig."""
     
     def test_model_config_vision_defaults(self):
