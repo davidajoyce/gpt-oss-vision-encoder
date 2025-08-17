@@ -146,6 +146,58 @@ projector = nn.Linear(768, model_config.hidden_size).to(device).float()
 
 print("✅ All components loaded on GPU!")
 
+# DISK SPACE MANAGEMENT
+import glob
+
+def get_disk_space():
+    """Get available disk space in GB"""
+    try:
+        statvfs = os.statvfs('.')
+        free_gb = statvfs.f_frsize * statvfs.f_bavail / 1e9
+        total_gb = statvfs.f_frsize * statvfs.f_blocks / 1e9
+        return free_gb, total_gb
+    except:
+        return None, None
+
+def cleanup_old_checkpoints(keep_latest=2):
+    """Remove old checkpoint files to free space"""
+    checkpoints = sorted(glob.glob("*checkpoint_step_*.pt"))
+    if len(checkpoints) > keep_latest:
+        for old_checkpoint in checkpoints[:-keep_latest]:
+            try:
+                size_gb = os.path.getsize(old_checkpoint) / 1e9
+                os.remove(old_checkpoint)
+                print(f"🗑️ Removed old checkpoint: {old_checkpoint} ({size_gb:.1f}GB)")
+            except Exception as e:
+                print(f"❌ Failed to remove {old_checkpoint}: {e}")
+
+def check_disk_space_before_save(min_gb=5):
+    """Check if we have enough space, cleanup if needed"""
+    free_gb, total_gb = get_disk_space()
+    if free_gb is None:
+        print("⚠️ Unable to check disk space")
+        return True
+    
+    print(f"💾 Disk space: {free_gb:.1f}GB free / {total_gb:.1f}GB total")
+    
+    if free_gb < min_gb:
+        print(f"🚨 LOW DISK SPACE: {free_gb:.1f}GB < {min_gb}GB minimum")
+        print("🧹 Cleaning up old checkpoints...")
+        cleanup_old_checkpoints(keep_latest=2)
+        
+        # Check again after cleanup
+        free_gb, _ = get_disk_space()
+        if free_gb and free_gb < min_gb:
+            print(f"⚠️ Still low on space: {free_gb:.1f}GB available")
+            print("💡 Consider:")
+            print("  - python cleanup_disk_space.py")
+            print("  - Increase RunPod storage allocation")
+            return False
+        else:
+            print(f"✅ Cleanup successful: {free_gb:.1f}GB available")
+    
+    return True
+
 # ROBUST CHECKPOINT SAVING - Fixed for large files
 def save_checkpoint_safely(checkpoint_data, checkpoint_path, max_retries=3):
     """Save checkpoint with robust error handling for large files"""
@@ -888,6 +940,11 @@ for epoch in range(config['num_epochs']):
                     checkpoint_data['used_real_data'] = dataset.use_real_data
                     checkpoint_data['model_size'] = sum(p.numel() for p in model.parameters()) / 1e6
                     
+                    # Check disk space before saving
+                    if not check_disk_space_before_save(min_gb=3):
+                        print(f"  ⚠️ Skipping checkpoint due to low disk space")
+                        continue
+                    
                     success = save_checkpoint_safely(checkpoint_data, checkpoint_path)
                     
                     if success:
@@ -939,7 +996,20 @@ try:
         'gpu_peak_memory': torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
     })
     
-    success = save_checkpoint_safely(final_checkpoint_data, final_path)
+    # Check disk space before final save
+    if not check_disk_space_before_save(min_gb=5):
+        print(f"⚠️ Low disk space for final checkpoint - saving minimal version")
+        # Save just the essential parts
+        minimal_final = {
+            'model_state_dict': model.state_dict(),
+            'projector_state_dict': projector.state_dict(),
+            'training_complete': True,
+            'final_loss': avg_loss if 'avg_loss' in locals() else float('inf'),
+            'total_steps': global_step
+        }
+        success = save_checkpoint_safely(minimal_final, final_path + "_minimal")
+    else:
+        success = save_checkpoint_safely(final_checkpoint_data, final_path)
     
     if success:
         print(f"✅ ULTIMATE final model saved: {final_path}")
