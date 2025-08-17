@@ -8,6 +8,10 @@ import torch
 import torch.distributed as dist
 
 from gpt_oss.torch.weights import Checkpoint
+from gpt_oss.constants import (
+    IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, IGNORE_INDEX,
+    add_image_tokens, validate_image_tokens
+)
 
 
 @dataclass
@@ -491,6 +495,336 @@ class Transformer(torch.nn.Module):
             
             if self.mm_projector is not None:
                 self.mm_projector.load_state_dict(get_w(mm_projector_weights, 'mm_projector'))
+
+    def initialize_image_tokenizer(self, tokenizer):
+        """
+        Initialize image tokens in the tokenizer and resize embeddings if needed.
+        
+        Args:
+            tokenizer: Tokenizer instance to modify
+            
+        Returns:
+            int: Image token ID
+        """
+        print("=== Initializing Image Tokenizer ===")
+        
+        # Get initial vocabulary size
+        original_vocab_size = len(tokenizer)
+        print(f"Original vocabulary size: {original_vocab_size}")
+        
+        # Add image tokens to vocabulary
+        image_token_id = add_image_tokens(tokenizer)
+        
+        # Check if vocabulary size changed
+        new_vocab_size = len(tokenizer)
+        num_new_tokens = new_vocab_size - original_vocab_size
+        
+        print(f"New vocabulary size: {new_vocab_size}")
+        print(f"Added {num_new_tokens} new tokens")
+        
+        # Always resize model embeddings to match tokenizer size
+        # This ensures model can handle all tokens in the tokenizer vocabulary
+        current_model_vocab_size = self.config.vocab_size
+        print(f"Current model vocab size: {current_model_vocab_size}")
+        
+        if new_vocab_size != current_model_vocab_size:
+            print(f"Resizing model embeddings to match tokenizer...")
+            self.resize_token_embeddings(new_vocab_size)
+            
+            # If we added new tokens, initialize their embeddings
+            if num_new_tokens > 0:
+                # Initialize new token embeddings with average of existing embeddings
+                input_embeddings = self.embedding.weight.data
+                output_embeddings = self.unembedding.weight.data
+                
+                # Calculate average embeddings (excluding the new tokens)
+                input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
+                output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
+                
+                # Initialize new tokens with average embeddings
+                input_embeddings[-num_new_tokens:] = input_embeddings_avg
+                output_embeddings[-num_new_tokens:] = output_embeddings_avg
+                
+                print(f"✅ Initialized {num_new_tokens} new token embeddings")
+        
+        # Store the image token ID for later use
+        self._image_token_id = image_token_id
+        
+        # Validate the configuration
+        if validate_image_tokens(tokenizer):
+            print("✅ Image tokenizer initialization successful")
+        else:
+            print("❌ Image tokenizer initialization failed")
+            
+        return image_token_id
+    
+    def resize_token_embeddings(self, new_vocab_size):
+        """
+        Resize token embeddings to accommodate new vocabulary size
+        
+        Args:
+            new_vocab_size: New vocabulary size
+        """
+        old_vocab_size = self.embedding.num_embeddings
+        
+        if new_vocab_size == old_vocab_size:
+            return
+            
+        print(f"Resizing embeddings from {old_vocab_size} to {new_vocab_size}")
+        
+        # Create new embedding layers
+        old_embedding = self.embedding
+        old_unembedding = self.unembedding
+        
+        # Create new layers with expanded vocabulary
+        self.embedding = torch.nn.Embedding(
+            new_vocab_size, 
+            self.config.hidden_size, 
+            device=old_embedding.weight.device, 
+            dtype=old_embedding.weight.dtype
+        )
+        
+        self.unembedding = torch.nn.Linear(
+            self.config.hidden_size,
+            new_vocab_size,
+            bias=False,
+            device=old_unembedding.weight.device,
+            dtype=old_unembedding.weight.dtype
+        )
+        
+        # Copy old weights
+        with torch.no_grad():
+            self.embedding.weight[:old_vocab_size] = old_embedding.weight
+            self.unembedding.weight[:old_vocab_size] = old_unembedding.weight
+        
+        # Update config
+        self.config.vocab_size = new_vocab_size
+        
+        print(f"✅ Embeddings resized to {new_vocab_size}")
+
+    def embed_tokens(self, input_ids):
+        """
+        Convert token IDs to embeddings
+        
+        Args:
+            input_ids: Token IDs tensor
+            
+        Returns:
+            Embeddings tensor
+        """
+        return self.embedding(input_ids)
+    
+    def set_image_token_id(self, image_token_id):
+        """
+        Manually set the image token ID (useful for testing)
+        
+        Args:
+            image_token_id: Token ID for image tokens
+        """
+        self._image_token_id = image_token_id
+        print(f"Set image token ID to: {image_token_id}")
+    
+    def encode_images(self, images):
+        """
+        Encode images to feature representations using vision tower and projector
+        
+        Args:
+            images: Image tensor [batch, 3, H, W]
+            
+        Returns:
+            Image features: [batch, num_patches, hidden_dim]
+        """
+        if self.vision_tower is None:
+            raise ValueError("Vision tower not initialized. Call initialize_vision_modules() first.")
+        
+        # Extract features using vision tower
+        image_features = self.get_vision_tower()(images)
+        
+        # Project to language space using mm_projector
+        if self.mm_projector is not None:
+            image_features = self.mm_projector(image_features)
+        
+        return image_features
+    
+    def prepare_multimodal_inputs(self, input_ids, images=None, labels=None):
+        """
+        Replace <image> tokens in input_ids with actual image features.
+        Based on LLaVA's prepare_inputs_labels_for_multimodal() function.
+        
+        Args:
+            input_ids: [batch, seq_len] text tokens including <image> placeholders
+            images: [batch, 3, 224, 224] or None
+            labels: [batch, seq_len] or None for training
+            
+        Returns:
+            dict with:
+                inputs_embeds: [batch, new_seq_len, hidden_dim] combined embeddings
+                labels: [batch, new_seq_len] updated labels for training (if provided)
+                attention_mask: [batch, new_seq_len] attention mask
+        """
+        # Handle text-only case (backward compatibility)
+        if images is None or self.vision_tower is None:
+            text_embeds = self.embed_tokens(input_ids)
+            batch_size, seq_len = input_ids.shape
+            attention_mask = torch.ones(batch_size, seq_len, dtype=torch.bool, device=input_ids.device)
+            
+            result = {
+                "inputs_embeds": text_embeds,
+                "attention_mask": attention_mask
+            }
+            if labels is not None:
+                result["labels"] = labels
+            return result
+        
+        # Encode images to features
+        image_features = self.encode_images(images)  # [batch, num_patches, hidden_dim]
+        
+        # Process each sequence in the batch
+        new_input_embeds = []
+        new_labels = []
+        
+        for batch_idx in range(input_ids.shape[0]):
+            cur_input_ids = input_ids[batch_idx]
+            cur_labels = labels[batch_idx] if labels is not None else None
+            
+            # Find <image> token positions
+            # Need to check for both IMAGE_TOKEN_INDEX and actual token ID from tokenizer
+            image_token_id = None
+            try:
+                # Try to get the actual token ID from the vocabulary
+                if hasattr(self, '_image_token_id'):
+                    image_token_id = self._image_token_id
+                else:
+                    # This should be set during tokenizer initialization, but fallback to IMAGE_TOKEN_INDEX
+                    image_token_id = IMAGE_TOKEN_INDEX
+            except:
+                image_token_id = IMAGE_TOKEN_INDEX
+                
+            image_token_positions = torch.where(cur_input_ids == image_token_id)[0]
+            num_images = len(image_token_positions)
+            
+            if num_images == 0:
+                # No images in this sequence - process as text only
+                text_embeds = self.embed_tokens(cur_input_ids)
+                new_input_embeds.append(text_embeds)
+                if cur_labels is not None:
+                    new_labels.append(cur_labels)
+                continue
+            
+            # Split sequence around image token positions
+            text_segments = []
+            label_segments = []
+            
+            # Process segments between image tokens
+            prev_pos = 0
+            for img_pos in image_token_positions.tolist() + [len(cur_input_ids)]:
+                # Get text segment before this image token (or end of sequence)
+                if img_pos > prev_pos:
+                    text_segments.append(cur_input_ids[prev_pos:img_pos])
+                    if cur_labels is not None:
+                        label_segments.append(cur_labels[prev_pos:img_pos])
+                else:
+                    # Empty segment
+                    text_segments.append(torch.tensor([], dtype=cur_input_ids.dtype, device=cur_input_ids.device))
+                    if cur_labels is not None:
+                        label_segments.append(torch.tensor([], dtype=cur_labels.dtype, device=cur_labels.device))
+                
+                prev_pos = img_pos + 1  # Skip the image token itself
+            
+            # Build combined embedding sequence
+            combined_embeds = []
+            combined_labels = []
+            
+            for i in range(len(text_segments)):
+                # Add text segment (if not empty)
+                if len(text_segments[i]) > 0:
+                    text_embeds = self.embed_tokens(text_segments[i])
+                    combined_embeds.append(text_embeds)
+                    if cur_labels is not None:
+                        combined_labels.append(label_segments[i])
+                
+                # Add image features (except after the last text segment)
+                if i < num_images:
+                    # Get image features for this batch
+                    cur_image_features = image_features[batch_idx]  # [num_patches, hidden_dim]
+                    combined_embeds.append(cur_image_features)
+                    
+                    if cur_labels is not None:
+                        # Image tokens should be ignored in loss computation
+                        num_patches = cur_image_features.shape[0]
+                        img_labels = torch.full(
+                            (num_patches,), 
+                            IGNORE_INDEX, 
+                            device=cur_labels.device, 
+                            dtype=cur_labels.dtype
+                        )
+                        combined_labels.append(img_labels)
+            
+            # Concatenate all segments for this sequence
+            if len(combined_embeds) > 0:
+                final_embeds = torch.cat(combined_embeds, dim=0)
+                new_input_embeds.append(final_embeds)
+                
+                if cur_labels is not None and len(combined_labels) > 0:
+                    final_labels = torch.cat(combined_labels, dim=0)
+                    new_labels.append(final_labels)
+        
+        # Pad sequences to same length
+        return self.pad_sequences(new_input_embeds, new_labels if labels is not None else None)
+    
+    def pad_sequences(self, input_embeds_list, labels_list=None):
+        """
+        Pad variable-length sequences to same length
+        
+        Args:
+            input_embeds_list: List of embedding tensors with different lengths
+            labels_list: List of label tensors (optional)
+            
+        Returns:
+            dict with padded tensors
+        """
+        if len(input_embeds_list) == 0:
+            raise ValueError("Empty input_embeds_list")
+            
+        # Calculate maximum length
+        max_len = max(x.shape[0] for x in input_embeds_list)
+        batch_size = len(input_embeds_list)
+        hidden_dim = input_embeds_list[0].shape[1]
+        device = input_embeds_list[0].device
+        dtype = input_embeds_list[0].dtype
+        
+        # Create padded tensors
+        padded_embeds = torch.zeros(batch_size, max_len, hidden_dim, dtype=dtype, device=device)
+        attention_mask = torch.zeros(batch_size, max_len, dtype=torch.bool, device=device)
+        
+        padded_labels = None
+        if labels_list is not None:
+            padded_labels = torch.full(
+                (batch_size, max_len), 
+                IGNORE_INDEX, 
+                dtype=labels_list[0].dtype, 
+                device=device
+            )
+        
+        # Fill in the actual data
+        for i, embeds in enumerate(input_embeds_list):
+            seq_len = embeds.shape[0]
+            padded_embeds[i, :seq_len] = embeds
+            attention_mask[i, :seq_len] = True
+            
+            if labels_list is not None and i < len(labels_list):
+                padded_labels[i, :seq_len] = labels_list[i]
+        
+        # Build result dictionary
+        result = {
+            "inputs_embeds": padded_embeds,
+            "attention_mask": attention_mask
+        }
+        
+        if padded_labels is not None:
+            result["labels"] = padded_labels
+        
+        return result
 
     @staticmethod
     def from_checkpoint(
