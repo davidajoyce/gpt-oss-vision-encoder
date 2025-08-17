@@ -146,9 +146,9 @@ projector = nn.Linear(768, model_config.hidden_size).to(device).float()
 
 print("✅ All components loaded on GPU!")
 
-# ROBUST CHECKPOINT SAVING (from checkpoint_fixed)
+# ROBUST CHECKPOINT SAVING - Fixed for large files
 def save_checkpoint_safely(checkpoint_data, checkpoint_path, max_retries=3):
-    """Save checkpoint with robust error handling"""
+    """Save checkpoint with robust error handling for large files"""
     print(f"  💾 Saving checkpoint: {checkpoint_path}")
     
     for attempt in range(max_retries):
@@ -159,55 +159,84 @@ def save_checkpoint_safely(checkpoint_data, checkpoint_path, max_retries=3):
             safe_checkpoint = {}
             for key, value in checkpoint_data.items():
                 if isinstance(value, torch.Tensor):
-                    safe_checkpoint[key] = value.detach().cpu()
+                    safe_checkpoint[key] = value.detach().cpu().clone()
                 elif isinstance(value, dict):
                     safe_dict = {}
                     for sub_key, sub_value in value.items():
                         if isinstance(sub_value, torch.Tensor):
-                            safe_dict[sub_key] = sub_value.detach().cpu()
+                            safe_dict[sub_key] = sub_value.detach().cpu().clone()
                         else:
                             safe_dict[sub_key] = sub_value
                     safe_checkpoint[key] = safe_dict
                 else:
                     safe_checkpoint[key] = value
             
-            # Save to temp file
-            torch.save(safe_checkpoint, temp_path)
+            # Use pickle protocol 4 for better large file handling
+            # Also use _use_new_zipfile_serialization=False to avoid zip issues
+            torch.save(safe_checkpoint, temp_path, 
+                      pickle_protocol=4,
+                      _use_new_zipfile_serialization=False)
             
-            # Verify
-            verification = torch.load(temp_path, map_location='cpu')
+            # Skip verification for large files (causes memory issues)
+            print(f"    📦 Checkpoint written to temp file")
             
             # Atomic move
             if os.path.exists(checkpoint_path):
                 backup_path = checkpoint_path + ".backup"
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
                 shutil.move(checkpoint_path, backup_path)
             
             shutil.move(temp_path, checkpoint_path)
             
+            # Clean up backup
             if os.path.exists(checkpoint_path + ".backup"):
-                os.remove(checkpoint_path + ".backup")
+                try:
+                    os.remove(checkpoint_path + ".backup")
+                except:
+                    pass
             
             print(f"    ✅ Checkpoint saved successfully (attempt {attempt + 1})")
             return True
             
         except Exception as e:
             print(f"    ❌ Save attempt {attempt + 1} failed: {e}")
-            if os.path.exists(checkpoint_path + ".tmp"):
+            if os.path.exists(temp_path):
                 try:
-                    os.remove(checkpoint_path + ".tmp")
+                    os.remove(temp_path)
                 except:
                     pass
             
             if attempt == max_retries - 1:
+                # Try alternative save method as last resort
+                print(f"    🔄 Trying alternative save method...")
+                try:
+                    # Save only essential components
+                    minimal_checkpoint = {
+                        'model_state_dict': checkpoint_data.get('model_state_dict'),
+                        'projector_state_dict': checkpoint_data.get('projector_state_dict'),
+                        'step': checkpoint_data.get('step'),
+                        'epoch': checkpoint_data.get('epoch'),
+                        'loss': checkpoint_data.get('loss')
+                    }
+                    torch.save(minimal_checkpoint, checkpoint_path + "_minimal.pt",
+                              pickle_protocol=4,
+                              _use_new_zipfile_serialization=False)
+                    print(f"    ✅ Minimal checkpoint saved: {checkpoint_path}_minimal.pt")
+                except:
+                    print(f"    ❌ Even minimal save failed")
                 return False
             else:
                 time.sleep(5)
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
+                    import gc
+                    gc.collect()
     
     return False
 
-def create_safe_checkpoint_data(model, projector, optimizer, scheduler, step, epoch, loss, config, model_config):
+def create_safe_checkpoint_data(model, projector, optimizer, scheduler, step, epoch, loss, config, model_config, 
+                                include_optimizer=False):  # Make optimizer optional
     """Create checkpoint data safely"""
     was_training = model.training
     model.eval()
@@ -224,14 +253,21 @@ def create_safe_checkpoint_data(model, projector, optimizer, scheduler, step, ep
             'timestamp': time.time()
         }
         
+        # Always save model and projector
         checkpoint_data['model_state_dict'] = model.state_dict()
         checkpoint_data['projector_state_dict'] = projector.state_dict()
         
-        try:
-            checkpoint_data['optimizer_state_dict'] = optimizer.state_dict()
-        except:
-            pass
+        # Only include optimizer if explicitly requested (it's huge)
+        if include_optimizer:
+            try:
+                checkpoint_data['optimizer_state_dict'] = optimizer.state_dict()
+                print(f"    📊 Including optimizer state (large)")
+            except Exception as e:
+                print(f"    ⚠️ Skipping optimizer state: {e}")
+        else:
+            print(f"    💡 Skipping optimizer state to reduce size")
         
+        # Scheduler is small, include it
         try:
             checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
         except:
@@ -844,7 +880,8 @@ for epoch in range(config['num_epochs']):
                 try:
                     checkpoint_data = create_safe_checkpoint_data(
                         model, projector, optimizer, scheduler, 
-                        global_step, epoch, actual_loss, config, model_config
+                        global_step, epoch, actual_loss, config, model_config,
+                        include_optimizer=False  # Don't include optimizer to reduce size
                     )
                     
                     # Add ultimate-specific info
@@ -887,7 +924,8 @@ print(f"\n💾 Saving ULTIMATE final model...")
 try:
     final_checkpoint_data = create_safe_checkpoint_data(
         model, projector, optimizer, scheduler,
-        global_step, config['num_epochs'], best_loss, config, model_config
+        global_step, config['num_epochs'], best_loss, config, model_config,
+        include_optimizer=True  # Include optimizer in final checkpoint
     )
     
     final_checkpoint_data.update({
