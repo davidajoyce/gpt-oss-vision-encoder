@@ -27,22 +27,32 @@ print("🚀 LLaVA-150K Training - ULTIMATE VERSION")
 print("Ultra GPU + Real Dataset + Robust Checkpoints")
 print("="*60)
 
-# Check GPU
+# Check GPU with aggressive memory clearing
 if torch.cuda.is_available():
     gpu_name = torch.cuda.get_device_name(0)
     gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
     print(f"✅ GPU: {gpu_name} ({gpu_memory:.1f}GB)")
     device = 'cuda'
+    
+    # Aggressive memory clearing
     torch.cuda.empty_cache()
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
+    
+    # Set memory allocation strategy
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    
     print(f"🔧 GPU Memory cleared: {torch.cuda.memory_allocated()/1e9:.2f}GB allocated")
+    print(f"🔧 GPU Memory available: {(gpu_memory - torch.cuda.memory_allocated()/1e9):.1f}GB")
 else:
     print("⚠️ No GPU found, using CPU")
     device = 'cpu'
 
-# ULTIMATE configuration for A100 80GB
+# Memory-optimized configuration for A100 80GB
 config = {
     'num_samples': 150000,
-    'batch_size': 20,        # ULTRA optimized for 80GB
+    'batch_size': 12,        # Reduced for memory safety
     'learning_rate': 2e-5,
     'num_epochs': 3,
     'save_every': 5000,
@@ -51,11 +61,11 @@ config = {
     'image_size': 224,
     'pin_memory': True,
     'non_blocking': True,
-    'prefetch_factor': 6,    # Enhanced prefetching
-    'gradient_accumulation_steps': 2,  # Effective batch size = 40
+    'prefetch_factor': 4,    # Reduced for memory
+    'gradient_accumulation_steps': 3,  # Effective batch size = 36
 }
 
-print(f"\n📊 ULTIMATE Configuration for A100 80GB:")
+print(f"\n📊 Memory-Optimized Configuration for A100 80GB:")
 for k, v in config.items():
     print(f"  {k}: {v}")
 print(f"🎯 Effective batch size: {config['batch_size'] * config['gradient_accumulation_steps']}")
@@ -66,18 +76,45 @@ print("\n📦 Loading model components...")
 from gpt_oss.torch.model import Transformer, ModelConfig
 from gpt_oss.constants import DEFAULT_IMAGE_TOKEN, IGNORE_INDEX
 
-# ULTIMATE model size for 80GB GPU
+# Check available memory before model creation
+if torch.cuda.is_available():
+    available_memory = (gpu_memory - torch.cuda.memory_allocated()/1e9)
+    print(f"🔍 Available GPU memory: {available_memory:.1f}GB")
+    if available_memory < 10:
+        print(f"⚠️ WARNING: Low GPU memory ({available_memory:.1f}GB). Consider reducing model size.")
+
+# Optimized model size for available GPU memory
+# Reduced from ultimate size due to memory constraints
 model_config = ModelConfig(
-    num_hidden_layers=16,    # Even larger for 80GB
-    hidden_size=1024,        # Much larger hidden size
+    num_hidden_layers=12,    # Reduced from 16 for memory
+    hidden_size=768,         # Reduced from 1024 for memory
     vocab_size=50258,
-    num_attention_heads=16,
-    num_key_value_heads=16,
-    intermediate_size=4096,  # Much larger FFN
+    num_attention_heads=12,
+    num_key_value_heads=12,
+    intermediate_size=3072,  # Reduced from 4096 for memory
 )
 
-model = Transformer(model_config, device=device)
-model = model.float()
+print(f"🏗️ Creating model with {model_config.num_hidden_layers} layers, {model_config.hidden_size} hidden size...")
+
+# Create model with memory monitoring
+try:
+    model = Transformer(model_config, device=device)
+    print(f"📊 Model created successfully")
+    
+    # Convert to float with memory check
+    if torch.cuda.is_available():
+        print(f"💾 GPU memory before .float(): {torch.cuda.memory_allocated()/1e9:.2f}GB")
+    
+    model = model.float()
+    
+    if torch.cuda.is_available():
+        print(f"💾 GPU memory after .float(): {torch.cuda.memory_allocated()/1e9:.2f}GB")
+        
+except torch.cuda.OutOfMemoryError as e:
+    print(f"❌ CUDA Out of Memory: {e}")
+    print("🔧 Try reducing model size or clearing GPU processes")
+    print("🔧 Suggested: pkill -f python; nvidia-smi")
+    exit(1)
 print(f"  Model: {sum(p.numel() for p in model.parameters())/1e6:.1f}M params")
 print(f"  Model device: {next(model.parameters()).device}")
 
