@@ -60,7 +60,10 @@ model_config = ModelConfig(
 )
 
 model = Transformer(model_config, device=device)
+# Convert model to float32 to avoid dtype issues
+model = model.float()
 print(f"  Model parameters: {sum(p.numel() for p in model.parameters())/1e6:.1f}M")
+print(f"  Model dtype: {next(model.parameters()).dtype}")
 
 # Tokenizer
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -89,8 +92,8 @@ vision_tower.eval()
 for param in vision_tower.parameters():
     param.requires_grad = False
 
-# Simple projector
-projector = nn.Linear(768, model_config.hidden_size).to(device)
+# Simple projector (ensure float32)
+projector = nn.Linear(768, model_config.hidden_size).to(device).float()
 
 print("✅ All components loaded!")
 
@@ -226,13 +229,21 @@ for epoch in range(config['num_epochs']):
                 labels=labels
             )
             
-            # Forward pass in float32
-            embeddings = multimodal_inputs["inputs_embeds"].float()
+            # Forward pass - ensure all tensors are float32
+            embeddings = multimodal_inputs["inputs_embeds"]
             target_labels = multimodal_inputs["labels"]
             
-            # Model forward
+            # Ensure embeddings are float32
+            if embeddings.dtype != torch.float32:
+                embeddings = embeddings.float()
+            
+            # Model forward (model is already float32)
             hidden_states = model.norm(embeddings)
             logits = model.unembedding(hidden_states)
+            
+            # Ensure logits are float32
+            if logits.dtype != torch.float32:
+                logits = logits.float()
             
             # Compute loss
             loss = criterion(logits.view(-1, logits.size(-1)), target_labels.view(-1))
