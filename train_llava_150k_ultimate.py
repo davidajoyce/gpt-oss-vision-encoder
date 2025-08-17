@@ -49,10 +49,10 @@ else:
     print("⚠️ No GPU found, using CPU")
     device = 'cpu'
 
-# Memory-optimized configuration for A100 80GB
+# Balanced configuration for A100 80GB (optimized for speed + utilization)
 config = {
     'num_samples': 150000,
-    'batch_size': 12,        # Reduced for memory safety
+    'batch_size': 8,         # Reduced for better throughput
     'learning_rate': 2e-5,
     'num_epochs': 3,
     'save_every': 5000,
@@ -61,11 +61,11 @@ config = {
     'image_size': 224,
     'pin_memory': True,
     'non_blocking': True,
-    'prefetch_factor': 4,    # Reduced for memory
-    'gradient_accumulation_steps': 3,  # Effective batch size = 36
+    'prefetch_factor': 2,    # Reduced to prevent bottleneck
+    'gradient_accumulation_steps': 4,  # Effective batch size = 32
 }
 
-print(f"\n📊 Memory-Optimized Configuration for A100 80GB:")
+print(f"\n📊 Speed-Optimized Configuration for A100 80GB:")
 for k, v in config.items():
     print(f"  {k}: {v}")
 print(f"🎯 Effective batch size: {config['batch_size'] * config['gradient_accumulation_steps']}")
@@ -629,13 +629,13 @@ def ultimate_collate_fn(batch):
         'pixel_values': pixel_values
     }
 
-# Ultimate DataLoader
+# Speed-optimized DataLoader
 train_loader = DataLoader(
     dataset, 
     batch_size=config['batch_size'],
     shuffle=True,
     collate_fn=ultimate_collate_fn,
-    num_workers=4,
+    num_workers=2,                    # Reduced to prevent CPU bottleneck
     pin_memory=config['pin_memory'],
     persistent_workers=True,
     prefetch_factor=config['prefetch_factor'],
@@ -693,7 +693,7 @@ print(f"\n🎯 Starting ULTIMATE training...")
 print(f"📊 Total steps: {total_steps}")
 print(f"🔥 Warmup steps: {warmup_steps}")
 print(f"📈 Effective batch size: {config['batch_size'] * config['gradient_accumulation_steps']}")
-print(f"🖥️ Target GPU utilization: 70-90% on A100 80GB")
+print(f"🖥️ Target GPU utilization: 60-80% on A100 80GB (balanced for speed)")
 
 # Enhanced GPU monitoring
 def log_gpu_memory_ultimate(step, force=False):
@@ -706,11 +706,13 @@ def log_gpu_memory_ultimate(step, force=False):
         
         print(f"    🖥️ GPU: {allocated:.1f}GB/{gpu_memory:.1f}GB ({utilization:.1f}%) | Peak: {max_allocated:.1f}GB")
         
-        if utilization > 70:
+        if utilization > 90:
+            print(f"    ⚠️ VERY HIGH GPU utilization - may slow training")
+        elif utilization > 70:
             print(f"    🏆 EXCELLENT GPU utilization!")
-        elif utilization > 40:
+        elif utilization > 50:
             print(f"    ✅ Good GPU utilization")
-        elif utilization > 20:
+        elif utilization > 30:
             print(f"    ⚠️ Moderate GPU utilization")
         else:
             print(f"    ❌ Low GPU utilization - increase batch size")
@@ -726,6 +728,7 @@ start_time = time.time()
 global_step = 0
 best_loss = float('inf')
 accumulation_step = 0
+batch_times = []  # Track batch processing times
 
 # ULTIMATE training loop
 for epoch in range(config['num_epochs']):
@@ -737,6 +740,8 @@ for epoch in range(config['num_epochs']):
     for batch_idx, batch in enumerate(train_loader):
         if batch is None:
             continue
+        
+        batch_start_time = time.time()  # Time each batch
         
         input_ids = batch['input_ids'].to(device, non_blocking=config['non_blocking'])
         labels = batch['labels'].to(device, non_blocking=config['non_blocking'])
@@ -780,11 +785,19 @@ for epoch in range(config['num_epochs']):
             epoch_loss += loss.item() * config['gradient_accumulation_steps']
             num_batches += 1
             
-            # Enhanced progress reporting
+            # Track batch timing
+            batch_time = time.time() - batch_start_time
+            batch_times.append(batch_time)
+            if len(batch_times) > 100:  # Keep only last 100 times
+                batch_times.pop(0)
+            
+            # Enhanced progress reporting with timing
             if (batch_idx + 1) % 500 == 0:
                 current_lr = scheduler.get_last_lr()[0] if hasattr(scheduler, 'get_last_lr') else config['learning_rate']
                 actual_loss = loss.item() * config['gradient_accumulation_steps']
+                avg_batch_time = sum(batch_times) / len(batch_times) if batch_times else 0
                 print(f"  Batch {batch_idx+1}/{len(train_loader)} | Loss: {actual_loss:.4f} | LR: {current_lr:.2e} | Step: {global_step}")
+                print(f"    ⏱️ Avg batch time: {avg_batch_time:.2f}s | Batches/min: {60/avg_batch_time:.1f}")
                 log_gpu_memory_ultimate(global_step)
             
             # ROBUST checkpoint saving
