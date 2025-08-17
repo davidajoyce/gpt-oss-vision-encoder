@@ -10,7 +10,7 @@ apt-get update -qq && apt-get install -y git wget
 
 # 2. Clone repository
 echo "📥 Cloning repository..."
-git clone https://github.com/YOUR_USERNAME/gpt-oss-vision-encoder.git
+git clone -b djoyce/vision-encoder-llava https://github.com/YOUR_USERNAME/gpt-oss-vision-encoder.git
 cd gpt-oss-vision-encoder
 
 # 3. Install Python dependencies

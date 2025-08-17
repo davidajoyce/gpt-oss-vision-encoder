@@ -27,7 +27,7 @@ Connect to your pod and run:
 
 ```bash
 # Copy this entire block and paste into RunPod terminal
-git clone https://github.com/YOUR_USERNAME/gpt-oss-vision-encoder.git && \
+git clone -b djoyce/vision-encoder-llava https://github.com/YOUR_USERNAME/gpt-oss-vision-encoder.git && \
 cd gpt-oss-vision-encoder && \
 docker build -t gpt-oss-vision . && \
 docker run --gpus all \

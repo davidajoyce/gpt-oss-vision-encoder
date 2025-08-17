@@ -6,7 +6,7 @@ echo "======================================"
 
 # 1. Clone repo
 echo "📦 Cloning repository..."
-git clone https://github.com/YOUR_USERNAME/gpt-oss-vision-encoder.git
+git clone -b djoyce/vision-encoder-llava https://github.com/YOUR_USERNAME/gpt-oss-vision-encoder.git
 cd gpt-oss-vision-encoder
 
 # 2. Build Docker image
