@@ -107,6 +107,7 @@ model_config = ModelConfig(
     num_attention_heads=12,
     num_key_value_heads=12,
     intermediate_size=3072,  # Reduced from 4096 for memory
+    num_experts=1,           # CRITICAL: Use single expert (default 128 creates 10.9B params!)
 )
 
 print(f"🏗️ Creating model with {model_config.num_hidden_layers} layers, {model_config.hidden_size} hidden size...")
@@ -130,7 +131,16 @@ except torch.cuda.OutOfMemoryError as e:
     print("🔧 Try reducing model size or clearing GPU processes")
     print("🔧 Suggested: pkill -f python; nvidia-smi")
     exit(1)
-print(f"  Model: {sum(p.numel() for p in model.parameters())/1e6:.1f}M params")
+# Validate model size to catch MoE issues early
+total_params = sum(p.numel() for p in model.parameters())
+print(f"  Model: {total_params/1e6:.1f}M params")
+if total_params > 100e6:  # 100M params threshold
+    print(f"❌ ERROR: Model too large ({total_params/1e6:.1f}M params)!")
+    print(f"🔧 This suggests MoE is enabled. Add num_experts=1 to ModelConfig")
+    exit(1)
+else:
+    print(f"✅ Model size validated: {total_params/1e6:.1f}M parameters")
+
 print(f"  Model device: {next(model.parameters()).device}")
 
 # Tokenizer
