@@ -31,52 +31,91 @@ def main():
     coco_dir = "coco_images"
     os.makedirs(coco_dir, exist_ok=True)
     
-    # Check if already downloaded
+    # Check what's already downloaded
     val2017_dir = os.path.join(coco_dir, "val2017")
-    if os.path.exists(val2017_dir) and len(os.listdir(val2017_dir)) > 5000:
-        print(f"✅ COCO val2017 already downloaded: {len(os.listdir(val2017_dir))} images")
-        return val2017_dir
+    train2017_dir = os.path.join(coco_dir, "train2017")
     
-    print("\n📥 Downloading COCO val2017 images...")
-    print("⚠️ This will download ~1GB of data (5K validation images)")
+    val_exists = os.path.exists(val2017_dir) and len([f for f in os.listdir(val2017_dir) if f.endswith('.jpg')]) > 4000
+    train_exists = os.path.exists(train2017_dir) and len([f for f in os.listdir(train2017_dir) if f.endswith('.jpg')]) > 100000
     
-    # COCO val2017 URL
-    val2017_url = "http://images.cocodataset.org/zips/val2017.zip"
-    zip_path = os.path.join(coco_dir, "val2017.zip")
+    if val_exists and train_exists:
+        val_count = len([f for f in os.listdir(val2017_dir) if f.endswith('.jpg')])
+        train_count = len([f for f in os.listdir(train2017_dir) if f.endswith('.jpg')])
+        print(f"✅ COCO images already downloaded:")
+        print(f"   - val2017: {val_count} images")
+        print(f"   - train2017: {train_count} images")
+        return coco_dir
     
-    # Download if not exists
-    if not os.path.exists(zip_path):
-        print(f"\n📦 Downloading val2017.zip...")
+    print("\n📥 Downloading COCO images for LLaVA training...")
+    print("🎯 LLaVA-150K uses images from BOTH train2017 and val2017")
+    print("⚠️ This will download ~20GB of data (118K train + 5K val images)")
+    print("⏱️ Estimated time: 15-30 minutes depending on connection")
+    
+    # Download URLs
+    datasets = {
+        'val2017': {
+            'url': 'http://images.cocodataset.org/zips/val2017.zip',
+            'size': '~1GB',
+            'count': '5K images'
+        },
+        'train2017': {
+            'url': 'http://images.cocodataset.org/zips/train2017.zip', 
+            'size': '~19GB',
+            'count': '118K images'
+        }
+    }
+    
+    for dataset_name, info in datasets.items():
+        dataset_dir = os.path.join(coco_dir, dataset_name)
+        zip_path = os.path.join(coco_dir, f"{dataset_name}.zip")
+        
+        # Check if already exists
+        if os.path.exists(dataset_dir):
+            existing_count = len([f for f in os.listdir(dataset_dir) if f.endswith('.jpg')])
+            expected_min = 4000 if dataset_name == 'val2017' else 100000
+            
+            if existing_count > expected_min:
+                print(f"✅ {dataset_name} already exists: {existing_count} images")
+                continue
+        
+        print(f"\n📦 Downloading {dataset_name} ({info['size']}, {info['count']})...")
+        
+        # Download if not exists
+        if not os.path.exists(zip_path):
+            try:
+                download_file(info['url'], zip_path)
+                print(f"✅ {dataset_name} download complete!")
+            except Exception as e:
+                print(f"❌ {dataset_name} download failed: {e}")
+                print(f"\n💡 Manual download: {info['url']}")
+                if dataset_name == 'train2017':
+                    print("💡 You can continue with val2017 only, but some LLaVA images will be missing")
+                    continue
+                else:
+                    sys.exit(1)
+        else:
+            print(f"✅ Using existing {dataset_name}.zip")
+        
+        # Extract images
+        print(f"\n📂 Extracting {dataset_name}...")
         try:
-            download_file(val2017_url, zip_path)
-            print("✅ Download complete!")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(coco_dir)
+            print(f"✅ Extracted to: {dataset_dir}")
         except Exception as e:
-            print(f"❌ Download failed: {e}")
-            print("\n💡 Alternative: Download manually from:")
-            print(f"   {val2017_url}")
-            print(f"   Save to: {zip_path}")
-            sys.exit(1)
-    else:
-        print(f"✅ Using existing zip: {zip_path}")
-    
-    # Extract images
-    print("\n📂 Extracting images...")
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(coco_dir)
-        print(f"✅ Extracted to: {val2017_dir}")
-    except Exception as e:
-        print(f"❌ Extraction failed: {e}")
-        sys.exit(1)
-    
-    # Verify extraction
-    if os.path.exists(val2017_dir):
-        num_images = len([f for f in os.listdir(val2017_dir) if f.endswith('.jpg')])
-        print(f"\n✅ Successfully extracted {num_images} images!")
-        print(f"📍 Images location: {os.path.abspath(val2017_dir)}")
-    else:
-        print("❌ Extraction failed - directory not found")
-        sys.exit(1)
+            print(f"❌ {dataset_name} extraction failed: {e}")
+            if dataset_name == 'val2017':
+                sys.exit(1)
+            continue
+        
+        # Verify extraction
+        if os.path.exists(dataset_dir):
+            num_images = len([f for f in os.listdir(dataset_dir) if f.endswith('.jpg')])
+            print(f"✅ Successfully extracted {num_images} {dataset_name} images!")
+        else:
+            print(f"❌ {dataset_name} extraction failed - directory not found")
+            if dataset_name == 'val2017':
+                sys.exit(1)
     
     # Check LLaVA dataset compatibility
     print("\n🔍 Checking LLaVA dataset compatibility...")
