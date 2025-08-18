@@ -253,11 +253,34 @@ def save_checkpoint_safely(checkpoint_data, checkpoint_path, max_retries=3):
             
         except Exception as e:
             print(f"    ❌ Save attempt {attempt + 1} failed: {e}")
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except:
-                    pass
+            
+            # AGGRESSIVE cleanup of temp files (they might be huge and consuming space)
+            temp_patterns = [temp_path, temp_path + "*", checkpoint_path + ".tmp*", "*.tmp"]
+            for pattern in temp_patterns:
+                if '*' in pattern:
+                    import glob
+                    for temp_file in glob.glob(pattern):
+                        try:
+                            if os.path.exists(temp_file):
+                                size_mb = os.path.getsize(temp_file) / 1e6
+                                os.remove(temp_file)
+                                print(f"    🧹 Cleaned temp file: {temp_file} ({size_mb:.1f}MB)")
+                        except:
+                            pass
+                else:
+                    try:
+                        if os.path.exists(pattern):
+                            size_mb = os.path.getsize(pattern) / 1e6
+                            os.remove(pattern)
+                            print(f"    🧹 Cleaned temp file: {pattern} ({size_mb:.1f}MB)")
+                    except:
+                        pass
+            
+            # Force garbage collection and cache clearing
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            import gc
+            gc.collect()
             
             if attempt == max_retries - 1:
                 # Try alternative save method as last resort
@@ -870,6 +893,43 @@ for epoch in range(config['num_epochs']):
                 
                 global_step += 1
                 accumulation_step = 0
+                
+                # CHECKPOINT SAVING - Only when global_step actually increments!
+                if global_step > 0 and global_step % config['save_every'] == 0:
+                    checkpoint_path = f"llava_150k_ultimate_checkpoint_step_{global_step}.pt"
+                    
+                    print(f"\n  💾 Creating ULTIMATE checkpoint at step {global_step}...")
+                    
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    
+                    try:
+                        checkpoint_data = create_safe_checkpoint_data(
+                            model, projector, optimizer, scheduler, 
+                            global_step, epoch, actual_loss, config, model_config,
+                            include_optimizer=False  # Don't include optimizer to reduce size
+                        )
+                        
+                        # Add ultimate-specific info
+                        checkpoint_data['used_real_data'] = dataset.use_real_data
+                        checkpoint_data['model_size'] = sum(p.numel() for p in model.parameters()) / 1e6
+                        
+                        # Check disk space before saving
+                        if not check_disk_space_before_save(min_gb=3):
+                            print(f"  ⚠️ Skipping checkpoint due to low disk space")
+                        else:
+                            success = save_checkpoint_safely(checkpoint_data, checkpoint_path)
+                            
+                            if success:
+                                print(f"  ✅ ULTIMATE checkpoint saved!")
+                                log_gpu_memory_ultimate(global_step, force=True)
+                            else:
+                                print(f"  ❌ Checkpoint failed, continuing...")
+                        
+                    except Exception as e:
+                        print(f"  ❌ Checkpoint creation failed: {e}")
+                    
+                    print()
             
             epoch_loss += loss.item() * config['gradient_accumulation_steps']
             num_batches += 1
@@ -920,44 +980,6 @@ for epoch in range(config['num_epochs']):
                         print(f"  ❌ Cannot check GPU memory")
                 last_progress_time = time.time()  # Reset timer
             
-            # ROBUST checkpoint saving
-            if global_step > 0 and global_step % config['save_every'] == 0:
-                checkpoint_path = f"llava_150k_ultimate_checkpoint_step_{global_step}.pt"
-                
-                print(f"\n  💾 Creating ULTIMATE checkpoint at step {global_step}...")
-                
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                
-                try:
-                    checkpoint_data = create_safe_checkpoint_data(
-                        model, projector, optimizer, scheduler, 
-                        global_step, epoch, actual_loss, config, model_config,
-                        include_optimizer=False  # Don't include optimizer to reduce size
-                    )
-                    
-                    # Add ultimate-specific info
-                    checkpoint_data['used_real_data'] = dataset.use_real_data
-                    checkpoint_data['model_size'] = sum(p.numel() for p in model.parameters()) / 1e6
-                    
-                    # Check disk space before saving
-                    if not check_disk_space_before_save(min_gb=3):
-                        print(f"  ⚠️ Skipping checkpoint due to low disk space")
-                        continue
-                    
-                    success = save_checkpoint_safely(checkpoint_data, checkpoint_path)
-                    
-                    if success:
-                        print(f"  ✅ ULTIMATE checkpoint saved!")
-                        log_gpu_memory_ultimate(global_step, force=True)
-                    else:
-                        print(f"  ❌ Checkpoint failed, continuing...")
-                    
-                except Exception as e:
-                    print(f"  ❌ Checkpoint creation failed: {e}")
-                
-                print()
-                
         except Exception as e:
             print(f"  ❌ Batch {batch_idx} failed: {e}")
             continue
