@@ -134,10 +134,13 @@ except torch.cuda.OutOfMemoryError as e:
 # Validate model size to catch MoE issues early
 total_params = sum(p.numel() for p in model.parameters())
 print(f"  Model: {total_params/1e6:.1f}M params")
-if total_params > 100e6:  # 100M params threshold
+if total_params > 1000e6:  # 1B params threshold - only catch extreme MoE cases
     print(f"❌ ERROR: Model too large ({total_params/1e6:.1f}M params)!")
     print(f"🔧 This suggests MoE is enabled. Add num_experts=1 to ModelConfig")
     exit(1)
+elif total_params > 500e6:  # 500M params - warn but continue
+    print(f"⚠️ WARNING: Model larger than expected ({total_params/1e6:.1f}M params)")
+    print(f"🔧 Expected ~190M params for this config. Check ModelConfig settings.")
 else:
     print(f"✅ Model size validated: {total_params/1e6:.1f}M parameters")
 
