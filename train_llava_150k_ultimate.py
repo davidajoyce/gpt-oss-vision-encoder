@@ -21,10 +21,23 @@ import json
 import requests
 import tempfile
 import shutil
+import argparse
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='LLaVA-150K Training - ULTIMATE VERSION')
+parser.add_argument('--no-checkpoints', action='store_true', 
+                    help='Disable checkpoint saving during training (only save final model)')
+parser.add_argument('--no-final-save', action='store_true',
+                    help='Disable final model saving')
+args = parser.parse_args()
 
 print("="*60)
 print("🚀 LLaVA-150K Training - ULTIMATE VERSION")
 print("Ultra GPU + Real Dataset + Robust Checkpoints")
+if args.no_checkpoints:
+    print("⚠️ Checkpoint saving DISABLED (final model will still be saved)")
+if args.no_final_save:
+    print("⚠️ Final model saving DISABLED")
 print("="*60)
 
 # Check GPU with aggressive memory clearing
@@ -63,6 +76,8 @@ config = {
     'non_blocking': True,
     'prefetch_factor': 2,    # Reduced to prevent bottleneck
     'gradient_accumulation_steps': 4,  # Effective batch size = 32
+    'save_checkpoints': not args.no_checkpoints,    # Controlled by --no-checkpoints flag
+    'save_final_model': not args.no_final_save,     # Controlled by --no-final-save flag
 }
 
 print(f"\n📊 Speed-Optimized Configuration for A100 80GB:")
@@ -894,11 +909,15 @@ for epoch in range(config['num_epochs']):
                 global_step += 1
                 accumulation_step = 0
                 
-                # CHECKPOINT SAVING - Only when global_step actually increments!
-                if global_step > 0 and global_step % config['save_every'] == 0:
+                # CHECKPOINT SAVING - Only when global_step actually increments and enabled!
+                if config['save_checkpoints'] and global_step > 0 and global_step % config['save_every'] == 0:
                     checkpoint_path = f"llava_150k_ultimate_checkpoint_step_{global_step}.pt"
                     
                     print(f"\n  💾 Creating ULTIMATE checkpoint at step {global_step}...")
+                    
+                    # Quick size estimation
+                    est_size_gb = (sum(p.numel() for p in model.parameters()) + sum(p.numel() for p in projector.parameters())) * 4 / 1e9
+                    print(f"    📊 Estimated size: ~{est_size_gb:.2f}GB (without optimizer)")
                     
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
@@ -930,6 +949,9 @@ for epoch in range(config['num_epochs']):
                         print(f"  ❌ Checkpoint creation failed: {e}")
                     
                     print()
+                elif not config['save_checkpoints'] and global_step > 0 and global_step % config['save_every'] == 0:
+                    print(f"\n  ⏭️ Skipping checkpoint at step {global_step} (checkpoint saving disabled)")
+                    log_gpu_memory_ultimate(global_step, force=True)
             
             epoch_loss += loss.item() * config['gradient_accumulation_steps']
             num_batches += 1
@@ -998,48 +1020,78 @@ for epoch in range(config['num_epochs']):
 total_time = time.time() - start_time
 final_path = "llava_150k_ultimate_final.pt"
 
-print(f"\n💾 Saving ULTIMATE final model...")
-
-try:
-    final_checkpoint_data = create_safe_checkpoint_data(
-        model, projector, optimizer, scheduler,
-        global_step, config['num_epochs'], best_loss, config, model_config,
-        include_optimizer=True  # Include optimizer in final checkpoint
-    )
+if config['save_final_model']:
+    print(f"\n💾 Saving ULTIMATE final model...")
     
-    final_checkpoint_data.update({
-        'total_time': total_time,
-        'final_loss': avg_loss if 'avg_loss' in locals() else float('inf'),
-        'best_loss': best_loss,
-        'total_steps': global_step,
-        'training_complete': True,
-        'used_real_data': dataset.use_real_data,
-        'model_size_mb': sum(p.numel() for p in model.parameters()) / 1e6,
-        'gpu_peak_memory': torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-    })
+    # Estimate checkpoint size before saving
+    model_params = sum(p.numel() for p in model.parameters())
+    projector_params = sum(p.numel() for p in projector.parameters())
+    optimizer_params = sum(p.numel() for p in optimizer.state.values() for p in (p['exp_avg'].numel() + p['exp_avg_sq'].numel()) if isinstance(p, dict) and 'exp_avg' in p)
     
-    # Check disk space before final save
-    if not check_disk_space_before_save(min_gb=5):
-        print(f"⚠️ Low disk space for final checkpoint - saving minimal version")
-        # Save just the essential parts
-        minimal_final = {
-            'model_state_dict': model.state_dict(),
-            'projector_state_dict': projector.state_dict(),
-            'training_complete': True,
+    # Rough estimation: 4 bytes per float32 parameter
+    model_size_gb = (model_params * 4) / 1e9
+    projector_size_gb = (projector_params * 4) / 1e9
+    optimizer_size_gb = (optimizer_params * 4) / 1e9
+    total_size_gb = model_size_gb + projector_size_gb + optimizer_size_gb
+    
+    print(f"📊 Estimated checkpoint size:")
+    print(f"  - Model: {model_size_gb:.2f}GB ({model_params/1e6:.1f}M params)")
+    print(f"  - Projector: {projector_size_gb:.3f}GB ({projector_params/1e6:.1f}M params)")
+    print(f"  - Optimizer: {optimizer_size_gb:.2f}GB")
+    print(f"  - Total (with optimizer): ~{total_size_gb:.2f}GB")
+    print(f"  - Total (without optimizer): ~{(model_size_gb + projector_size_gb):.2f}GB")
+    
+    # Check disk space with the estimated size
+    free_gb, total_gb = get_disk_space()
+    if free_gb:
+        print(f"💾 Available disk space: {free_gb:.1f}GB")
+        if free_gb < total_size_gb * 1.5:  # Need 1.5x for safe saving
+            print(f"⚠️ WARNING: Low disk space! Need ~{total_size_gb*1.5:.1f}GB, have {free_gb:.1f}GB")
+            print(f"💡 Consider saving without optimizer (would need ~{(model_size_gb + projector_size_gb)*1.5:.1f}GB)")
+    
+    try:
+        final_checkpoint_data = create_safe_checkpoint_data(
+            model, projector, optimizer, scheduler,
+            global_step, config['num_epochs'], best_loss, config, model_config,
+            include_optimizer=True  # Include optimizer in final checkpoint
+        )
+        
+        final_checkpoint_data.update({
+            'total_time': total_time,
             'final_loss': avg_loss if 'avg_loss' in locals() else float('inf'),
-            'total_steps': global_step
-        }
-        success = save_checkpoint_safely(minimal_final, final_path + "_minimal")
-    else:
-        success = save_checkpoint_safely(final_checkpoint_data, final_path)
-    
-    if success:
-        print(f"✅ ULTIMATE final model saved: {final_path}")
-    else:
-        print(f"❌ Final model save failed!")
-    
-except Exception as e:
-    print(f"❌ Final model creation failed: {e}")
+            'best_loss': best_loss,
+            'total_steps': global_step,
+            'training_complete': True,
+            'used_real_data': dataset.use_real_data,
+            'model_size_mb': sum(p.numel() for p in model.parameters()) / 1e6,
+            'gpu_peak_memory': torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+        })
+        
+        # Check disk space before final save
+        if not check_disk_space_before_save(min_gb=5):
+            print(f"⚠️ Low disk space for final checkpoint - saving minimal version")
+            # Save just the essential parts
+            minimal_final = {
+                'model_state_dict': model.state_dict(),
+                'projector_state_dict': projector.state_dict(),
+                'training_complete': True,
+                'final_loss': avg_loss if 'avg_loss' in locals() else float('inf'),
+                'total_steps': global_step
+            }
+            success = save_checkpoint_safely(minimal_final, final_path + "_minimal")
+        else:
+            success = save_checkpoint_safely(final_checkpoint_data, final_path)
+        
+        if success:
+            print(f"✅ ULTIMATE final model saved: {final_path}")
+        else:
+            print(f"❌ Final model save failed!")
+        
+    except Exception as e:
+        print(f"❌ Final model creation failed: {e}")
+else:
+    print(f"\n⏭️ Skipping final model save (final model saving disabled)")
+    print(f"🎯 Training completed successfully without saving model")
 
 print(f"\n🎉 ULTIMATE training complete!")
 print(f"⏱️ Total time: {total_time/60:.1f} minutes ({total_time/3600:.1f} hours)")
