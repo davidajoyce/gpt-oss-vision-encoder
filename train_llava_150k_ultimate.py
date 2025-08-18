@@ -1026,7 +1026,19 @@ if config['save_final_model']:
     # Estimate checkpoint size before saving
     model_params = sum(p.numel() for p in model.parameters())
     projector_params = sum(p.numel() for p in projector.parameters())
-    optimizer_params = sum(p.numel() for p in optimizer.state.values() for p in (p['exp_avg'].numel() + p['exp_avg_sq'].numel()) if isinstance(p, dict) and 'exp_avg' in p)
+    
+    # Calculate optimizer params correctly
+    optimizer_params = 0
+    try:
+        for state in optimizer.state.values():
+            if isinstance(state, dict):
+                if 'exp_avg' in state and hasattr(state['exp_avg'], 'numel'):
+                    optimizer_params += state['exp_avg'].numel()
+                if 'exp_avg_sq' in state and hasattr(state['exp_avg_sq'], 'numel'):
+                    optimizer_params += state['exp_avg_sq'].numel()
+    except Exception as e:
+        print(f"  ⚠️ Could not estimate optimizer size: {e}")
+        optimizer_params = 0
     
     # Rough estimation: 4 bytes per float32 parameter
     model_size_gb = (model_params * 4) / 1e9
